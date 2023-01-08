@@ -1,0 +1,95 @@
+#!/usr/bin/env node
+
+const SCRIPT_NAME = "wasm-shell";
+
+const process = require("process");
+const repl = require("repl");
+const fs = require("fs");
+
+/**
+ * Print application usage and exit.
+ */
+function usage()
+{
+    console.info(`Usage: ${SCRIPT_NAME} module.wasm`);
+    process.exit();
+}
+
+/**
+ * Loads the given WebAssembly module and returns its exports on success
+ * or `null` on failure.
+ *
+ * @param {String} path
+ * @returns {Object | null}
+ */
+function load_wasm(path)
+{
+    const deasync = require("deasync");
+
+    let wasm_exports = null;
+
+    if (!fs.existsSync(path))
+    {
+        return null;
+    }
+
+    // load the WASM module and wait for its exports to avoid a callback hell
+    try {
+        // TODO: possible to load WASM module sync without using deasync?
+        const wasmBuffer = fs.readFileSync(path);
+        WebAssembly.instantiate(wasmBuffer).then(wasmModule => {
+            wasm_exports = wasmModule.instance.exports;
+        });
+
+        // wait
+        while (wasm_exports == null)
+        {
+            deasync.sleep(100);
+        }
+
+        // return exports
+        return wasm_exports;
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+/**
+ *
+ * @param {Number} argc
+ * @param {Array<String>} argv
+ * @returns {Number}
+ */
+function main(argc, argv)
+{
+    if (argc < 2)
+    {
+        usage();
+    }
+
+    // load the wasm module and start a node repl
+    const wasm = load_wasm(argv[1]);
+
+    if (wasm == null)
+    {
+        console.error("unable to load WASM module!");
+        return 1;
+    }
+
+    process.stdout.write("WASM Exports: ");
+    console.log(wasm);
+    console.log("WASM module loaded, use the variable 'wasm' to access its exports.")
+
+    repl.start().context.wasm = wasm;
+    return 0;
+}
+
+// invoke main with relevant command line arguments
+const argv = [SCRIPT_NAME, ...require("process").argv.splice(2)];
+const res = main(argv.length, argv);
+
+if (res != 0)
+{
+    process.exit(res);
+}
