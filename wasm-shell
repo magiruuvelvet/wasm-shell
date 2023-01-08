@@ -24,31 +24,16 @@ function usage()
  */
 function load_wasm(path)
 {
-    const deasync = require("deasync");
-
-    let wasm_exports = null;
-
     if (!fs.existsSync(path))
     {
         return null;
     }
 
-    // load the WASM module and wait for its exports to avoid a callback hell
+    // load the WASM module synchronously and return its exports
     try {
-        // TODO: possible to load WASM module sync without using deasync?
         const wasmBuffer = fs.readFileSync(path);
-        WebAssembly.instantiate(wasmBuffer).then(wasmModule => {
-            wasm_exports = wasmModule.instance.exports;
-        });
-
-        // wait
-        while (wasm_exports == null)
-        {
-            deasync.sleep(100);
-        }
-
-        // return exports
-        return wasm_exports;
+        const wasmModule = new WebAssembly.Instance(new WebAssembly.Module(wasmBuffer));
+        return wasmModule.exports;
     } catch (e) {
         console.error(e);
         return null;
